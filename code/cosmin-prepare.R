@@ -1,7 +1,6 @@
-# ------------------------------------------------------------------------------------------------------
 #### SET UP
-# It is advised to start a new session for every case study
-# CLEAR MEMORY
+
+# clear memory
 rm(list=ls())
 
 # Import libraries
@@ -27,9 +26,10 @@ library(partykit)
 library(rpart.plot)
 library(tidyverse)
 library(lubridate)
+library(RColorBrewer)
 
-# load theme and functions
-source("code/gabor_textbook/theme_bg.R")
+# add colours and load functions
+color <- c(brewer.pal( 3, "Set2" )[1], brewer.pal( 3, "Set2" )[2], brewer.pal( 3, "Set2" )[3], brewer.pal( 3, "Set2" )[4])
 source("code/gabor_textbook/da_helper_functions.R")
 
 data_in <- "data/raw/"
@@ -208,7 +208,6 @@ summary(data$labor_avg_mod)
 data <- data %>%
   select(-labor_avg)
 
-######################### continue from here
 # create factors
 data <- data %>%
   mutate(urban_m = factor(urban_m, levels = c(1,2,3)),
@@ -216,44 +215,94 @@ data <- data %>%
 
 # no more imputation, drop obs if key vars missing
 data <- data %>%
-  filter(!is.na(liq_assets_bs),!is.na(foreign), !is.na(ind))
+  filter(!is.na(liq_assets_bs),!is.na(foreign))
+
+to_filter <- sapply(m, function(x) sum(is.na(x)))
+to_filter[to_filter > 0]
 
 # drop missing
 data <- data %>%
-  filter(!is.na(age),!is.na(foreign), !is.na(material_exp_pl), !is.na(m_region_loc))
+  filter( !is.na(material_exp_pl), !is.na(m_region_loc))
 Hmisc::describe(data$age)
 
 # drop unused factor levels
 data <- data %>%
   mutate_at(vars(colnames(data)[sapply(data, is.factor)]), funs(fct_drop))
 
-d1sale_2<-ggplot(data = data, aes(x=d1_sales_mil_log_mod, y=as.numeric(default))) +
+d1sale_2<-ggplot(data = data, aes(x=inc_bef_tax_pl, y=as.numeric(fast_growth))) +
   geom_point(size=0.1,  shape=20, stroke=2, fill=color[2], color=color[2]) +
   geom_smooth(method="loess", se=F, colour=color[1], size=1.5, span=0.9) +
-  labs(x = "Growth rate (Diff of ln sales)",y = "default") +
-  theme_bg() +
-  scale_x_continuous(limits = c(-1.5,1.5), breaks = seq(-1.5,1.5, 0.5))
+  labs(x = "Standardized income before tax",y = "Fast growth", title="Fast growth probability distribution across standardized income") +
+  theme_bw() +
+  theme( panel.grid.minor.x = element_blank(), 
+         plot.title = element_text( size = 12, face = "bold", hjust = 0.5 ) )
 d1sale_2
 save_fig("ch17-extra-2", output, "small")
 
-d1sale_3<-ggplot(data = data, aes(x=d1_sales_mil_log, y=d1_sales_mil_log_mod)) +
+data <- data %>% mutate( inc_bef_tax_std = inc_bef_tax / sales)
+
+# create 
+d1sale_3<-ggplot(data = data, aes(x=inc_bef_tax_std, y=inc_bef_tax_pl)) +
   geom_point(size=0.1,  shape=20, stroke=2, fill=color[2], color=color[2]) +
-  labs(x = "Growth rate (Diff of ln sales) (original)",y = "Growth rate (Diff of ln sales) (winsorized)") +
-  theme_bg() +
-  scale_x_continuous(limits = c(-5,5), breaks = seq(-5,5, 1)) +
-  scale_y_continuous(limits = c(-3,3), breaks = seq(-3,3, 1))
+  labs(x = "Income before tax (original)",y = "Income before tax (winsorized)", title = "Adding a cap to standardized income before tax") +
+  theme_bw() +
+  scale_x_continuous(limits = c(-10,10), breaks = seq(-10,10, 5)) +
+  theme( panel.grid.minor.x = element_blank(), 
+         plot.title = element_text( size = 12, face = "bold", hjust = 0.5 ) )
 d1sale_3
 save_fig("ch17-extra-3", output, "small")
-
-
 
 # check variables
 # datasummary_skim(data, type="numeric")
 
-write_csv(data,paste0(data_out,"bisnode_firms_clean.csv"))
+#write_csv(data,paste0(data_out,"bisnode_firms_clean.csv"))
 write_rds(data,paste0(data_out,"bisnode_firms_clean.rds"))
 
-min(data$begin)
-max(data$end)
-unique(data$year)
+####################### TODO: PUT THIS IN THE FEATURE ENGINEERING PART
+# add the logs of these variables
+ln_vars <- c("curr_assets", "curr_liab", "extra_exp", "extra_inc", "extra_profit_loss", "fixed_assets",
+        "inc_bef_tax", "intang_assets", "inventories", "liq_assets", "material_exp", "personnel_exp",
+        "profit_loss_year", "sales", "share_eq", "subscribed_cap")
 
+# add logs and replace with 1 if it is below or equal to 0
+data <- data %>% 
+  mutate_at(vars(ln_vars), funs("log" = ifelse( . <= 0, 1, log(.))))
+
+ln_vars2 <- NULL
+for (i in ln_vars){
+  new <- paste0(i, "_log")
+  ln_vars2 <- c(ln_vars2, new)
+}
+
+# replace 1s with half of the minimum value of the given column
+data <- data %>% 
+  mutate_at(vars(ln_vars2), funs(ifelse(. == 1, min(.[!. %in% c(1)])/2, .)))
+
+########### TODO
+# the minimum is going to be 1
+# should we exclude them?
+data$curr_assets_log[ data$curr_assets_log != 1 ]
+
+############### TODO: PUT THIS IN THE ANALYSIS CODE
+rawvars <-  c("curr_assets", "curr_liab", "extra_exp", "extra_inc", "extra_profit_loss", "fixed_assets",
+              "inc_bef_tax", "intang_assets", "inventories", "liq_assets", "material_exp", "personnel_exp",
+              "profit_loss_year", "sales", "share_eq", "subscribed_cap")
+rawvars_ln <- c("curr_assets_log", "curr_liab_log", "extra_exp_log", "extra_inc_log",
+                "extra_profit_loss_log", "fixed_assets_log", "inc_bef_tax_log",
+                "intang_assets_log", "inventories_log", "liq_assets_log", "material_exp_log",
+                "personnel_exp_log", "profit_loss_year_log", "sales_log", "share_eq_log",
+                "subscribed_cap_log")
+engvar <- c("total_assets_bs", "fixed_assets_bs", "liq_assets_bs", "curr_assets_bs",
+              "share_eq_bs", "subscribed_cap_bs", "intang_assets_bs", "extra_exp_pl",
+              "extra_inc_pl", "extra_profit_loss_pl", "inc_bef_tax_pl", "inventories_pl",
+              "material_exp_pl", "profit_loss_year_pl", "personnel_exp_pl")
+engvar2 <- c("extra_profit_loss_pl_quad", "inc_bef_tax_pl_quad",
+             "profit_loss_year_pl_quad", "share_eq_bs_quad")
+engvar3 <- c(grep("*flag_low$", names(data), value = TRUE),
+             grep("*flag_high$", names(data), value = TRUE),
+             grep("*flag_error$", names(data), value = TRUE),
+             grep("*flag_zero$", names(data), value = TRUE))
+ceo <- c("female", "ceo_age", "flag_high_ceo_age", "flag_low_ceo_age",
+         "flag_miss_ceo_age", "ceo_count", "foreign_management")
+firm <- c("age", "age2", "ind2_cat", "m_region_loc", "urban_m","labor_avg_mod",
+          "flag_miss_labor_avg" )
