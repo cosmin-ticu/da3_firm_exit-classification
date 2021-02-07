@@ -32,6 +32,7 @@ library(RColorBrewer)
 color <- c(brewer.pal( 3, "Set2" )[1], brewer.pal( 3, "Set2" )[2], brewer.pal( 3, "Set2" )[3], brewer.pal( 3, "Set2" )[4])
 source("code/gabor_textbook/da_helper_functions.R")
 
+
 data_in <- "data/raw/"
 
 output <- "output/"
@@ -41,7 +42,8 @@ output <- "output/"
 # Import data
 ###########################################################
 
-data <- read_csv(paste(data_in,"cs_bisnode_panel.csv", sep = "/"))
+github_link <- 'https://raw.githubusercontent.com/cosmin-ticu/da3_firm_exit-classification/main/data/raw/cs_bisnode_panel.csv'
+data <- read_csv(github_link)
 
 # drop variables with many NAs
 data <- data %>%
@@ -116,6 +118,25 @@ data <- data %>%
          foreign_management = as.numeric(foreign >= 0.5),
          gender_m = factor(gender, levels = c("female", "male", "mix")),
          m_region_loc = factor(region_m, levels = c("Central", "East", "West")))
+
+# add the logs of these variables
+ln_vars <- c("curr_assets", "curr_liab", "extra_exp", "extra_inc", "extra_profit_loss", "fixed_assets",
+             "inc_bef_tax", "intang_assets", "inventories", "liq_assets", "material_exp", "personnel_exp",
+             "profit_loss_year", "sales", "share_eq", "subscribed_cap")
+
+# add logs and replace with 1 if it is below or equal to 0
+data <- data %>% 
+  mutate_at(vars(ln_vars), funs("log" = ifelse( . <= 0, NA, log(.))))
+
+ln_vars2 <- NULL
+for (i in ln_vars){
+  new <- paste0(i, "_log")
+  ln_vars2 <- c(ln_vars2, new)
+}
+
+# replace 1s with half of the minimum value of the given column
+data <- data %>% 
+  mutate_at(vars(ln_vars2), funs(ifelse(is.na(.), min(.)/2, .)))
 
 ###########################################################
 # look at more financial variables, create ratios
@@ -258,30 +279,6 @@ save_fig("ch17-extra-3", output, "small")
 #write_csv(data,paste0(data_out,"bisnode_firms_clean.csv"))
 write_rds(data,paste0(data_out,"bisnode_firms_clean.rds"))
 
-####################### TODO: PUT THIS IN THE FEATURE ENGINEERING PART
-# add the logs of these variables
-ln_vars <- c("curr_assets", "curr_liab", "extra_exp", "extra_inc", "extra_profit_loss", "fixed_assets",
-        "inc_bef_tax", "intang_assets", "inventories", "liq_assets", "material_exp", "personnel_exp",
-        "profit_loss_year", "sales", "share_eq", "subscribed_cap")
-
-# add logs and replace with 1 if it is below or equal to 0
-data <- data %>% 
-  mutate_at(vars(ln_vars), funs("log" = ifelse( . <= 0, 1, log(.))))
-
-ln_vars2 <- NULL
-for (i in ln_vars){
-  new <- paste0(i, "_log")
-  ln_vars2 <- c(ln_vars2, new)
-}
-
-# replace 1s with half of the minimum value of the given column
-data <- data %>% 
-  mutate_at(vars(ln_vars2), funs(ifelse(. == 1, min(.[!. %in% c(1)])/2, .)))
-
-########### TODO
-# the minimum is going to be 1
-# should we exclude them?
-data$curr_assets_log[ data$curr_assets_log != 1 ]
 
 ############### TODO: PUT THIS IN THE ANALYSIS CODE
 rawvars <-  c("curr_assets", "curr_liab", "extra_exp", "extra_inc", "extra_profit_loss", "fixed_assets",
