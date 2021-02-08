@@ -404,8 +404,7 @@ createRocPlotWithOptimal <- function(r, best_coords, file_name,  myheight_small 
     geom_point(aes(x = sp, y = se)) +
     annotate(geom = "text", x = sp, y = se,
              label = paste(round(sp, 2),round(se, 2),sep = ", "),
-             hjust = 1, vjust = -1, size = 7) +
-    theme_bg()
+             hjust = 1, vjust = -1, size = 7)
   #  + theme(axis.text.x = element_text(size=20), axis.text.y = element_text(size=20),
   #          axis.title.x = element_text(size=20), axis.title.y = element_text(size=20))
   save_fig(file_name, output, "small")
@@ -418,22 +417,25 @@ createRocPlotWithOptimal <- function(r, best_coords, file_name,  myheight_small 
   roc_plot
 }
 # createRocPlot <- function(r, file_name,  mywidth_large=12, myheight_large = 9) {
-createRocPlot <- function(r, file_name,  myheight_small = 5.625, mywidth_small = 7.5) {
+createRocPlot <- function(r, file_name, title,  myheight_small = 5.625, mywidth_small = 7.5) {
   all_coords <- coords(r, x="all", ret="all", transpose = FALSE)
 
   roc_plot <- ggplot(data = all_coords, aes(x = fpr, y = tpr)) +
     geom_line(color=color[1], size = 0.7) +
-    geom_area(aes(fill = color[4], alpha=0.4), alpha = 0.3, position = 'identity', color = color[1]) +
+    geom_area(aes(fill = color[3], alpha=0.4), alpha = 0.3, position = 'identity', color = color[1]) +
     scale_fill_viridis(discrete = TRUE, begin=0.6, alpha=0.5, guide = FALSE) +
     xlab("False Positive Rate (1-Specifity)") +
     ylab("True Positive Rate (Sensitivity)") +
     geom_abline(intercept = 0, slope = 1,  linetype = "dotted", col = "black") +
     scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, .1), expand = c(0, 0.01)) +
-    scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, .1), expand = c(0.01, 0)) +
-    theme_bg()
+    scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, .1), expand = c(0.01, 0))+
+    ggtitle(title)+
+    theme_light() +
+    theme( panel.grid.minor.x = element_blank(), 
+           plot.title = element_text( size = 12, face = "bold", hjust = 0.5 ) )
   #+    theme(axis.text.x = element_text(size=13), axis.text.y = element_text(size=13),
   #        axis.title.x = element_text(size=13), axis.title.y = element_text(size=13))
-  save_fig(file_name, output, "small")
+  # save_fig(file_name, output, "small")
 
   #ggsave(plot = roc_plot, paste0(file_name, ".png"),      width=mywidth_small, height=myheight_small, dpi=1200)
   #cairo_ps(filename = paste0(file_name, ".eps"),    #        width = mywidth_small, height = myheight_small, pointsize = 12,    #       fallback_resolution = 1200)

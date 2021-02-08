@@ -36,11 +36,12 @@ data_in <- "data/raw/"
 
 output <- "output/"
 
-data_out <- "data/clean"
+data_out <- "data/clean/"
 ###########################################################
 # Import data
 ###########################################################
 
+# data <- read_csv(paste0(data_in,"cs_bisnode_panel.csv"))
 github_link <- 'https://raw.githubusercontent.com/cosmin-ticu/da3_firm_exit-classification/main/data/raw/cs_bisnode_panel.csv'
 data <- read_csv(github_link)
 
@@ -63,6 +64,11 @@ data <- data %>%
   group_by(comp_id) %>% 
   mutate(pct_change = (sales/lag(sales) - 1) * 100)
 
+data <- data %>% mutate(sales = ifelse(year == 2011 & sales == 0, 1, sales))
+
+data <- data %>%
+  group_by(comp_id) %>% 
+  mutate(previous_growth = (lag(sales, 2)/lag(sales, 3) - 1) * 100)
 
 # keep 2013 to 2014 growth rate based on sales; keep 2014 values for other variables
 # keep only growing firms and exclude those that had 0 sales in 2013
@@ -276,12 +282,13 @@ data <- data %>%
   mutate(urban_m = factor(urban_m, levels = c(1,2,3)),
          ind2_cat = factor(ind2_cat, levels = sort(unique(data$ind2_cat))))
 
+data <- data %>%
+  mutate(fast_growth_f = factor(fast_growth, levels = c(0,1)) %>%
+           recode(., `0` = 'no_fast_growth', `1` = "yes_fast_growth"))
+
 # no more imputation, drop obs if key vars missing
 data <- data %>%
   filter(!is.na(liq_assets_bs),!is.na(foreign))
-
-to_filter <- sapply(data, function(x) sum(is.na(x)))
-to_filter[to_filter > 0]
 
 # drop missing
 data <- data %>%
@@ -294,6 +301,19 @@ data <- data %>% select(-c('birth_year', 'exit_date'))
 # drop unused factor levels
 data <- data %>%
   mutate_at(vars(colnames(data)[sapply(data, is.factor)]), funs(fct_drop))
+
+# impute & drop values for previous_growth variable
+data <- data %>% filter(!comp_id == 24779958272) # faulty data for these companies (missing 2011/2012 sales)
+data <- data %>% filter(!comp_id == 460263849984) # faulty data for these companies (missing 2011/2012 sales)
+
+# impute values
+data <- data %>%
+  mutate(flag_previous_growth = ifelse(is.na(previous_growth) | is.nan(previous_growth), 1, 0 ),
+         previous_growth = ifelse(is.na(previous_growth) | is.nan(previous_growth), 0, previous_growth ))
+
+# final checkup for missing values
+to_filter <- sapply(data, function(x) sum(is.na(x)))
+to_filter[to_filter > 0]
 
 # plot fast growth probability distribution across income
 fg_inc<-ggplot(data = data, aes(x=inc_bef_tax_pl, y=as.numeric(fast_growth))) +
