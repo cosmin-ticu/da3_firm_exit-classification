@@ -42,6 +42,9 @@ output <- "output/"
 
 data <- read_rds(paste0(data_in,"bisnode_firms_clean.rds"))
 
+#########################
+# MODEL SETUP
+#########################
 
 # define predictor sets --------------------------------------------------------
 
@@ -69,25 +72,6 @@ firm <- c("age", "age2", "ind2_cat", "m_region_loc", "urban_m","labor_avg_mod",
           "flag_miss_labor_avg", "previous_growth")
 
 # check interactions
-###### our way
-data %>% group_by(fast_growth, gender_m) %>% summarise(mean = mean(inc_bef_tax_pl)) %>% 
-  ggplot(aes(x = as.numeric(gender_m), y = mean)) +
-  geom_line(aes(color = factor(fast_growth))) +
-  geom_point(aes(color = factor(fast_growth)))
-
-data %>% group_by(fast_growth, gender_m) %>% summarise(mean = mean(inc_bef_tax_pl)) %>% 
-  ggplot(aes(x = fast_growth, y = mean)) +
-  geom_line(aes(color = factor(gender_m))) +
-  geom_point(aes(color = factor(gender_m)))
-
-inter <- function(data, factor_var, num_var){
-  data %>% group_by(fast_growth, factor_var) %>% summarise(mean = mean(num_var)) %>% 
-    ggplot(aes(x = as.numeric(factor_var), y = mean)) +
-    geom_line(aes(color = factor(fast_growth))) +
-    geom_point(aes(color = factor(fast_growth)))
-}
-#########
-# plot interactions
 # interaction between industry category and income before tax
 i1 <- interaction.plot( x.factor = data$ind2_cat, trace.factor = data$fast_growth, response = data$inc_bef_tax_pl, ylab = 'Mean(income before tax)', xlab = "Industry category", trace.label = "Fast growth" )
 
@@ -139,7 +123,7 @@ X9 <- c(engvar, ceo, firm, engvar2, engvar3, interactions_fact_cont_wins, int_al
 lasso_vars <- X9
 
 # for RF (no interactions, no modified features)
-rfvars  <-  c(rawvars, ceo, firm)
+rf_vars  <-  c(rawvars, ceo, firm)
 
 # Check simplest model X1
 glm_modelx1 <- glm(formula(paste0("fast_growth ~", paste0(X1, collapse = " + "))),
@@ -153,7 +137,7 @@ glm_modelx2 <- glm(formula(paste0("fast_growth ~", paste0(X2, collapse = " + "))
 summary(glm_modelx2)
 
 #calculate average marginal effects (dy/dx) for logit
-# mx2 <- margins(glm_modelx2)
+mx2 <- margins(glm_modelx2)
 
 sum_table <- summary(glm_modelx2) %>%
   coef() %>%
@@ -195,6 +179,10 @@ kable(x = sum_table2, format = "html", digits = 3,
 
 knitr::kable( sum_table2, caption = "Marginal effects of baseline engineered logit model", digits = 2 ) %>% kable_styling( position = "center", latex_options = 'hold_position' )
 
+#########################
+# PREDICT PROBABILITIES
+#########################
+
 # separate datasets -------------------------------------------------------
 
 set.seed(13505)
@@ -208,11 +196,6 @@ Hmisc::describe(data_train$fast_growth)
 Hmisc::describe(data_holdout
                 $fast_growth)
 # all partitions have comparable distributions
-
-#######################################################x
-# PART I PREDICT PROBABILITIES
-# Predict logit models ----------------------------------------------
-#######################################################x
 
 # 5 fold cross-validation
 train_control <- trainControl(
@@ -280,12 +263,43 @@ write.csv(lasso_coeffs, paste0(output, "lasso_logit_coeffs.csv"))
 
 CV_RMSE_folds[["LASSO"]] <- logit_lasso_model$resample[,c("Resample", "RMSE")]
 
-#############################################x
-# PART I
-# No loss fn
-########################################
 
-# Draw ROC Curve and calculate AUC for each folds --------------------------------
+# Probability forest ------------------------------------------------------
+
+# 5 fold cross-validation
+train_control$verboseIter <- TRUE
+
+# set tuning parameters
+tune_grid_rf <- expand.grid(
+  .mtry = c(5, 6, 7),
+  .splitrule = "gini",
+  .min.node.size = c(10, 15)
+)
+
+set.seed(13505)
+rf_model_p <- train(
+  formula(paste0("fast_growth_f ~", paste0(rf_vars, collapse = " + "))),
+  method = "ranger",
+  data = data_train,
+  tuneGrid = tune_grid_rf,
+  trControl = train_control
+)
+
+# save model
+saveRDS(rf_model_p, paste0(output,'rf_model.rds'))
+
+rf_model_p$results
+
+best_mtry <- rf_model_p$bestTune$mtry # 7
+best_min_node_size <- rf_model_p$bestTune$min.node.size # 15
+
+# add model to list
+logit_models[["Random Forest"]] <- rf_model_p
+
+# calculate RMSE
+CV_RMSE_folds[["Random Forest"]] <- rf_model_p$resample[,c("Resample", "RMSE")]
+
+# Draw ROC Curve and calculate AUC for each folds for each model --------------------------------
 CV_AUC_folds <- list()
 
 for (model_name in names(logit_models)) {
@@ -309,89 +323,155 @@ for (model_name in names(logit_models)) {
 
 CV_RMSE <- list()
 CV_AUC <- list()
-
+CV_RMSE_folds[['Random Forest']]$RMSE
 for (model_name in names(logit_models)) {
   CV_RMSE[[model_name]] <- mean(CV_RMSE_folds[[model_name]]$RMSE)
   CV_AUC[[model_name]] <- mean(CV_AUC_folds[[model_name]]$AUC)
 }
 
-# We have 10 models, (9 logit and the logit lasso). For each we have a 5-CV RMSE and AUC.
+# We have 11 models, (9 logit, 1 logit lasso and 1 random forest). For each we have a 5-CV RMSE and AUC.
 # We pick our preferred model based on that. -----------------------------------------------
 
 nvars <- lapply(logit_models, FUN = function(x) length(x$coefnames))
 nvars[["LASSO"]] <- sum(lasso_coeffs != 0)
 
-logit_summary1 <- data.frame("Number of predictors" = unlist(nvars),
+model_summary1 <- data.frame("Number of predictors" = unlist(nvars),
                              "CV RMSE" = unlist(CV_RMSE),
                              "CV AUC" = unlist(CV_AUC))
 
-kable(x = logit_summary1, format = "html", booktabs=TRUE,  digits = 3, row.names = TRUE,
+kable(x = model_summary1, format = "html", booktabs=TRUE,  digits = 3, row.names = TRUE,
       linesep = "", col.names = c("Number of predictors","CV RMSE","CV AUC")) %>%
   cat(.,file= paste0(output, "logit_summary1.html"))
 
-knitr::kable( logit_summary1, caption = "Performance of all logit models", digits = 2 ) %>% kable_styling( position = "center", latex_options = 'hold_position' )
+knitr::kable( model_summary1, caption = "Performance of all models", digits = 2 ) %>% kable_styling( position = "center", latex_options = 'hold_position' )
 
 
-# Take best model and estimate RMSE on holdout  -------------------------------------------
+# Take best model (RF) and estimate RMSE on holdout  -------------------------------------------
 
-best_logit_no_loss <- logit_models[["X3"]]
+best_model_no_loss <- logit_models[["Random Forest"]]
 
-logit_predicted_probabilities_holdout <- predict(best_logit_no_loss, newdata = data_holdout, type = "prob")
-data_holdout[,"best_logit_no_loss_pred"] <- logit_predicted_probabilities_holdout[,"yes_fast_growth"]
-RMSE(data_holdout[, "best_logit_no_loss_pred", drop=TRUE], data_holdout$fast_growth)
+rf_predicted_probabilities_holdout <- predict(best_model_no_loss, newdata = data_holdout, type = "prob")
+data_holdout[,"best_model_no_loss_pred"] <- rf_predicted_probabilities_holdout[,"yes_fast_growth"]
+RMSE(data_holdout[, "best_model_no_loss_pred", drop=TRUE], data_holdout$fast_growth)
 
-# continuous ROC on holdout with best model (Logit 3) -------------------------------------------
+# continuous ROC on holdout with best model (Random Forest) -------------------------------------------
 
-roc_obj_holdout <- roc(data_holdout$fast_growth, data_holdout$best_logit_no_loss_pred)
+roc_obj_holdout <- roc(data_holdout$fast_growth, data_holdout$best_model_no_loss_pred)
 
-createRocPlot(roc_obj_holdout, "best_logit_no_loss_roc_plot_holdout", "ROC Curve for best logit model (X3)")
+createRocPlot(roc_obj_holdout, "ROC curve for best model (RF)")
 
-# Confusion table with different tresholds ----------------------------------------------------------
+# Bias and calibration curve -----------------------------------------------------------
+# bias = mean(prediction) - mean(actual)
+bias_holdout <- mean(data_holdout$best_model_no_loss_pred) - mean( data_holdout$fast_growth )
 
-# default: the threshold 0.5 is used to convert probabilities to binary classes
-logit_class_prediction <- predict(best_logit_no_loss, newdata = data_holdout)
-summary(logit_class_prediction)
-
-describe(data_holdout$fast_growth) # based on this checkup, threshold of 0.5 (basic) is not good
-
-# Calibration curve -----------------------------------------------------------
-# how well do estimated vs actual event probabilities relate to each other?
-
-
+# plot calibration curve
 create_calibration_plot(data_holdout, 
-                        file_name = "ch17-figure-1-logit-m4-calibration", 
-                        prob_var = "best_logit_no_loss_pred", 
-                        actual_var = "default",
+                        prob_var = "best_model_no_loss_pred", 
+                        actual_var = "fast_growth",
                         n_bins = 10)
 
-####### TODO: SHOOT YOURSELF
-###
-# Bias and Calibration curve for the holdout sample
-#
-# using the best logit model
-#
-# bias = mean(prediction) - mean(actual)
-bias_holdout <- mean(data_holdout$best_logit_no_loss_pred) - mean( data_holdout$fast_growth )
-# Not really biased... it is really tiny!
+#########################
+# CLASSIFICATION
+#########################
 
-actual_vs_predicted_test <- office_test %>%
-  ungroup() %>% 
-  dplyr::select(actual = mission, 
-                predicted = pred_logit) 
-num_groups <- 10
+# define a loss function
+# we want to invest in fast growing firms
+# FP: bad investment
+# FN: foregone business opportunity
+FP <- 2
+FN <- 5
+cost <- FN/FP
 
-calibration_d_test <- actual_vs_predicted_test %>%
-  mutate(predicted_score_group = dplyr::ntile(predicted, num_groups))%>%
-  group_by(predicted_score_group) %>%
-  dplyr::summarise(mean_actual = mean(actual), 
-                   mean_predicted = mean(predicted), 
-                   num_obs = n())
+# the proportion of TP cases
+prevalence <- sum(data_train$fast_growth)/length(data_train$fast_growth)
 
-ggplot( calibration_d_test,aes(x = mean_actual, y = mean_predicted)) +
-  geom_point( color='red', size=1.5, alpha=0.8) +
-  geom_line(  color='red', size=1  , alpha=0.8) +
-  geom_abline( intercept = 0, slope = 1, color='blue') +
-  labs( x = "Actual event probability", y = "Predicted event probability") +
-  scale_x_continuous(expand = c(0.01,0.01), limits = c(0.5,1), breaks = seq(0,1,0.1)) +
-  scale_y_continuous(expand = c(0.01,0.01), limits = c(0.5,1), breaks = seq(0,1,0.1))
+# Draw ROC Curve and find optimal threshold with loss function --------------------------
+
+best_tresholds <- list()
+expected_loss <- list()
+models_cv_rocs <- list()
+models_cv_threshold <- list()
+models_cv_expected_loss <- list()
+
+for (model_name in names(logit_models)) {
+
+  model <- logit_models[[model_name]]
+  colname <- paste0(model_name,"_prediction")
+  
+  best_tresholds_cv <- list()
+  expected_loss_cv <- list()
+  
+  for (fold in c("Fold1", "Fold2", "Fold3", "Fold4", "Fold5")) {
+
+    cv_fold <-
+      model$pred %>%
+      filter(Resample == fold)
+    
+    roc_obj <- roc(cv_fold$obs, cv_fold$yes_fast_growth)
+    best_treshold <- coords(roc_obj, "best", ret="all", transpose = FALSE,
+                            best.method="youden", best.weights=c(cost, prevalence))
+    best_tresholds_cv[[fold]] <- best_treshold$threshold
+    expected_loss_cv[[fold]] <- (best_treshold$fp*FP + best_treshold$fn*FN)/length(cv_fold$yes_fast_growth)
+  }
+  
+  # average
+  best_tresholds[[model_name]] <- mean(unlist(best_tresholds_cv))
+  expected_loss[[model_name]] <- mean(unlist(expected_loss_cv))
+  
+  # for fold #5
+  models_cv_rocs[[model_name]] <- roc_obj
+  models_cv_threshold[[model_name]] <- best_treshold
+  models_cv_expected_loss[[model_name]] <- expected_loss_cv[[fold]]
+  
+}
+
+model_summary2 <- data.frame("Avg of optimal thresholds" = unlist(best_tresholds),
+                             "Threshold for Fold5" = sapply(models_cv_threshold, function(x) {x$threshold}),
+                             "Avg expected loss" = unlist(expected_loss),
+                             "Expected loss for Fold5" = unlist(models_cv_expected_loss))
+
+kable(x = model_summary2, format = "html", booktabs=TRUE,  digits = 3, row.names = TRUE,
+      linesep = "", col.names = c("Avg of optimal thresholds","Threshold for fold #5",
+                                  "Avg expected loss","Expected loss for fold #5")) %>%
+  cat(.,file= paste0(output, "logit_summary1.html"))
+
+knitr::kable( model_summary2, caption = "Best thresholds based on expected loss for all models", digits = 2 ) %>% kable_styling( position = "center", latex_options = 'hold_position' )
+
+
+# Create plots based on Fold5 in CV ----------------------------------------------
+
+  model_name <- 'Random Forest'
+  r <- models_cv_rocs[[model_name]]
+  best_coords <- models_cv_threshold[[model_name]]
+  createLossPlot(r, best_coords,
+                 "Loss plot for RF Fold 5")
+  createRocPlotWithOptimal(r, best_coords,
+                           "ROC curve for RF Fold 5")
+
+# Pick best model based on average expected loss ----------------------------------
+
+best_model_with_loss <- logit_models[["Random Forest"]]
+best_model_optimal_treshold <- best_tresholds[["Random Forest"]]
+
+rf_predicted_probabilities_holdout <- predict(best_model_with_loss, newdata = data_holdout, type = "prob")
+data_holdout[,"best_model_with_loss_pred"] <- rf_predicted_probabilities_holdout[,"yes_fast_growth"]
+
+# ROC curve on holdout
+roc_obj_holdout <- roc(data_holdout$fast_growth, data_holdout[, "best_model_with_loss_pred", drop=TRUE])
+
+# Get expected loss on holdout
+holdout_treshold <- coords(roc_obj_holdout, x = best_model_optimal_treshold, input= "threshold",
+                           ret="all", transpose = FALSE)
+expected_loss_holdout <- (holdout_treshold$fp*FP + holdout_treshold$fn*FN)/length(data_holdout$fast_growth)
+expected_loss_holdout
+
+# Confusion table on holdout with optimal threshold
+holdout_prediction <-
+  ifelse(data_holdout$best_model_with_loss_pred < best_model_optimal_treshold, "no_fast_growth", "yes_fast_growth") %>%
+  factor(levels = c("no_fast_growth", "yes_fast_growth"))
+cm_object <- confusionMatrix(holdout_prediction,data_holdout$fast_growth_f)
+cm <- cm_object$table
+cm
+
+knitr::kable( cm, caption = "Confusion matrix for best model RF", digits = 2 ) %>% kable_styling( position = "center", latex_options = 'hold_position' )
 

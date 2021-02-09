@@ -356,7 +356,7 @@ twoClassSummaryExtended <- function (data, lev = NULL, model = NULL)
 
 
 #createLossPlot <- function(r, best_coords, file_name,  mywidth_large=12, myheight_large = 9) {
-createLossPlot <- function(r, best_coords, file_name,  myheight_small = 5.625, mywidth_small = 7.5) {
+createLossPlot <- function(r, best_coords, title,  myheight_small = 5.625, mywidth_small = 7.5) {
   t <- best_coords$threshold[1]
   sp <- best_coords$specificity[1]
   se <- best_coords$sensitivity[1]
@@ -376,8 +376,10 @@ createLossPlot <- function(r, best_coords, file_name,  myheight_small = 5.625, m
              colour=color[2], angle=90, vjust = -1, hjust = -0.5, size = 7) +
     annotate(geom = "text", x = t, y= l,
              label= round(l, 2), hjust = -0.3, size = 7) +
-    theme_bg()
-  save_fig(file_name, output, "small")
+    ggtitle(title)+
+    theme_light() +
+    theme( panel.grid.minor.x = element_blank(), 
+           plot.title = element_text( size = 12, face = "bold", hjust = 0.5 ) )
 
   #  ggsave(plot = loss_plot, paste0(file_name,".png"), width=mywidth_small, height=myheight_small, dpi=1200)
   #  cairo_ps(filename = paste0(file_name,".eps"), width = mywidth_small, height = myheight_small, pointsize = 12, fallback_resolution = 1200)
@@ -390,7 +392,7 @@ createLossPlot <- function(r, best_coords, file_name,  myheight_small = 5.625, m
 
 
 #createRocPlotWithOptimal <- function(r, best_coords, file_name,  mywidth_large=12, myheight_large = 9) {
-createRocPlotWithOptimal <- function(r, best_coords, file_name,  myheight_small = 5.625, mywidth_small = 7.5) {
+createRocPlotWithOptimal <- function(r, best_coords, title,  myheight_small = 5.625, mywidth_small = 7.5) {
 
   all_coords <- coords(r, x="all", ret="all", transpose = FALSE)
   t <- best_coords$threshold[1]
@@ -404,10 +406,14 @@ createRocPlotWithOptimal <- function(r, best_coords, file_name,  myheight_small 
     geom_point(aes(x = sp, y = se)) +
     annotate(geom = "text", x = sp, y = se,
              label = paste(round(sp, 2),round(se, 2),sep = ", "),
-             hjust = 1, vjust = -1, size = 7)
+             hjust = 1, vjust = -1, size = 7) +
+    ggtitle(title)+
+    theme_light() +
+    theme( panel.grid.minor.x = element_blank(), 
+           plot.title = element_text( size = 12, face = "bold", hjust = 0.5 ) )
   #  + theme(axis.text.x = element_text(size=20), axis.text.y = element_text(size=20),
   #          axis.title.x = element_text(size=20), axis.title.y = element_text(size=20))
-  save_fig(file_name, output, "small")
+
 
   #  ggsave(plot = roc_plot, paste0(file_name, ".png"),         width=mywidth_small, height=myheight_small, dpi=1200)
   # cairo_ps(filename = paste0(file_name, ".eps"),           width = mywidth_small, height = myheight_small, pointsize = 12,           fallback_resolution = 1200)
@@ -417,7 +423,7 @@ createRocPlotWithOptimal <- function(r, best_coords, file_name,  myheight_small 
   roc_plot
 }
 # createRocPlot <- function(r, file_name,  mywidth_large=12, myheight_large = 9) {
-createRocPlot <- function(r, file_name, title,  myheight_small = 5.625, mywidth_small = 7.5) {
+createRocPlot <- function(r, title,  myheight_small = 5.625, mywidth_small = 7.5) {
   all_coords <- coords(r, x="all", ret="all", transpose = FALSE)
 
   roc_plot <- ggplot(data = all_coords, aes(x = fpr, y = tpr)) +
@@ -507,7 +513,7 @@ getPointsGraphWithPseudo <- function(data, colors) {
     theme_bg()
 }
 
-create_calibration_plot <- function(data, file_name, prob_var, actual_var, y_lab = "Actual event probability" , n_bins = 10, breaks = NULL) {
+create_calibration_plot <- function(data, prob_var, actual_var, y_lab = "Actual event probability" , n_bins = 10, breaks = NULL) {
   
   if (is.null(breaks)) {
     breaks <- seq(0,1,length.out = n_bins + 1)
@@ -526,14 +532,15 @@ create_calibration_plot <- function(data, file_name, prob_var, actual_var, y_lab
       geom_line(aes(mean_prob, mean_actual), color=color[1], size=0.6, show.legend = TRUE) +
       geom_point(aes(mean_prob,mean_actual), color = color[1], size = 1, shape = 16, alpha = 0.7, show.legend=F, na.rm = TRUE) +
       geom_segment(x=min(breaks), xend=max(breaks), y=min(breaks), yend=max(breaks), color=color[2], size=0.3) +
-      theme_bg() +
       labs(x= "Predicted event probability",
            y= y_lab) +
       coord_cartesian(xlim=c(0,1), ylim=c(0,1))+
       expand_limits(x = 0.01, y = 0.01) +
       scale_y_continuous(expand=c(0.01,0.01),breaks=c(seq(0,1,0.1))) +
-      scale_x_continuous(expand=c(0.01,0.01),breaks=c(seq(0,1,0.1))) 
-
-    save_fig(file_name, output, "small")
+      scale_x_continuous(expand=c(0.01,0.01),breaks=c(seq(0,1,0.1))) +
+      ggtitle('Calibration curve for model X3') +
+      theme_light() +
+      theme( panel.grid.minor.x = element_blank(), 
+             plot.title = element_text( size = 12, face = "bold", hjust = 0.5 ) )
     p
 }
