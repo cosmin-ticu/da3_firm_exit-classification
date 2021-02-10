@@ -149,7 +149,7 @@ create_calibration_plot <- function(data, prob_var, actual_var, y_lab = "Actual 
       expand_limits(x = 0.01, y = 0.01) +
       scale_y_continuous(expand=c(0.01,0.01),breaks=c(seq(0,1,0.1))) +
       scale_x_continuous(expand=c(0.01,0.01),breaks=c(seq(0,1,0.1))) +
-      ggtitle('Calibration curve for model X3') +
+      ggtitle('Calibration curve for RF model') +
       theme_light() +
       theme( panel.grid.minor.x = element_blank(), 
              plot.title = element_text( size = 12, face = "bold", hjust = 0.5 ) )

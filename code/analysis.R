@@ -149,7 +149,7 @@ sum_table <- summary(glm_modelx2) %>%
 kable(x = sum_table, format = "html", digits = 3,
       col.names = c("Variable", "Coefficient", "dx/dy"),
       caption = "Marginal effects of baseline raw logit model") %>%
-  cat(.,file= paste0(output,"AME_logit_X2.html"))
+  cat(.,file= paste0(output,"logit_X2.html"))
 
 knitr::kable( sum_table, caption = "Marginal effects of baseline raw logit model", digits = 2 ) %>% kable_styling( position = "center", latex_options = 'hold_position' )
 
@@ -175,7 +175,7 @@ sum_table2 <- summary(glm_modelx7) %>%
 kable(x = sum_table2, format = "html", digits = 3,
       col.names = c("Variable", "Coefficient", "SE", "dx/dy"),
       caption = "Marginal effects of baseline engineered logit model") %>%
-  cat(.,file= paste0(output,"AME_logit_X4.html"))
+  cat(.,file= paste0(output,"logit_X7.html"))
 
 knitr::kable( sum_table2, caption = "Marginal effects of baseline engineered logit model", digits = 2 ) %>% kable_styling( position = "center", latex_options = 'hold_position' )
 
@@ -341,7 +341,7 @@ model_summary1 <- data.frame("Number of predictors" = unlist(nvars),
 
 kable(x = model_summary1, format = "html", booktabs=TRUE,  digits = 3, row.names = TRUE,
       linesep = "", col.names = c("Number of predictors","CV RMSE","CV AUC")) %>%
-  cat(.,file= paste0(output, "logit_summary1.html"))
+  cat(.,file= paste0(output, "model_summary1.html"))
 
 knitr::kable( model_summary1, caption = "Performance of all models", digits = 2 ) %>% kable_styling( position = "center", latex_options = 'hold_position' )
 
@@ -433,7 +433,7 @@ model_summary2 <- data.frame("Avg of optimal thresholds" = unlist(best_tresholds
 kable(x = model_summary2, format = "html", booktabs=TRUE,  digits = 3, row.names = TRUE,
       linesep = "", col.names = c("Avg of optimal thresholds","Threshold for fold #5",
                                   "Avg expected loss","Expected loss for fold #5")) %>%
-  cat(.,file= paste0(output, "logit_summary1.html"))
+  cat(.,file= paste0(output, "model_summary2.html"))
 
 knitr::kable( model_summary2, caption = "Best thresholds based on expected loss for all models", digits = 2 ) %>% kable_styling( position = "center", latex_options = 'hold_position' )
 
