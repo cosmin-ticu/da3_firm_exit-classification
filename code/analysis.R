@@ -31,7 +31,7 @@ library(stats)
 library(viridis)
 
 # add colours and load functions
-source("code/gabor_textbook/da_helper_functions.R")
+source("code/helper/da_helper_functions.R")
 color <- c(brewer.pal( 3, "Set2" )[1], brewer.pal( 3, "Set2" )[2], brewer.pal( 3, "Set2" )[3], brewer.pal( 3, "Set2" )[5])
 
 data_in <- "data/clean/"

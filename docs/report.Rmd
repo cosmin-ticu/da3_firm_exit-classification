@@ -1,3 +1,20 @@
+---
+title: "Firm Growth - Prediction and Classification"
+subtitle: "Data Analysis 3 - Assignment 2"
+author: "Cosmin Ticu & Kata Süle"
+date: '11th February 2021'
+output:
+  html_document:
+    code_download: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+```
+
+```{r, include=FALSE}
 #### SET UP
 
 # clear memory
@@ -27,19 +44,22 @@ library(rpart.plot)
 library(tidyverse)
 library(lubridate)
 library(RColorBrewer)
+library(viridis)
 
 # add colours and load functions
 source("code/helper/da_helper_functions.R")
 color <- c(brewer.pal( 3, "Set2" )[1], brewer.pal( 3, "Set2" )[2], brewer.pal( 3, "Set2" )[3], brewer.pal( 3, "Set2" )[5])
 
+# set directories
 data_in <- "data/raw/"
-
 output <- "output/"
-
 data_out <- "data/clean/"
-###########################################################
-# Import data
-###########################################################
+```
+
+```{r, include=FALSE}
+################
+# import data
+################
 
 # data <- read_csv(paste0(data_in,"cs_bisnode_panel.csv"))
 github_link <- 'https://raw.githubusercontent.com/cosmin-ticu/da3_firm_exit-classification/main/data/raw/cs_bisnode_panel.csv'
@@ -55,17 +75,22 @@ data <- data %>%
 describe(data$ind2)
 
 describe(data$liq_assets)
+```
 
+```{r, include=FALSE}
 ###########################################################
 # label engineering
 ###########################################################
 
+# calculate year-on-year change for sales
 data <- data %>%
   group_by(comp_id) %>% 
   mutate(pct_change = (sales/lag(sales) - 1) * 100)
 
+# impute sales with 1 for firms that reported 0 sales for 2011
 data <- data %>% mutate(sales = ifelse(year == 2011 & sales == 0, 1, sales))
 
+# calculate year-on-year change for sales for the previous 2 years
 data <- data %>%
   group_by(comp_id) %>% 
   mutate(previous_growth = (lag(sales, 2)/lag(sales, 3) - 1) * 100)
@@ -91,14 +116,17 @@ data <- data %>%
 
 table(data$fast_growth)
 
-
-# sample design -------------------------------------------------------
+###########################################################
+# sample design
+###########################################################
 
 describe(data$sales)
 
 # keep companies whose sales are between the 5th and the 95th percentile
 data <- data %>% filter(sales > 5582 & sales < 2045845 )
+```
 
+```{r, include=FALSE}
 ###########################################################
 # Feature engineering
 ###########################################################
@@ -165,8 +193,13 @@ h4 <- ggplot( data = data, aes( x = inventories ) ) +
   scale_y_continuous(limits = c(0, 2000))
 
 sum_histograms <- plot_grid(h1, h2, h3, h4, nrow=2, ncol=2)
-sum_histograms
+```
 
+```{r}
+sum_histograms
+```
+
+```{r, include=FALSE}
 # add the logs of these variables
 ln_vars <- c("curr_assets", "curr_liab", "extra_exp", "extra_inc", "extra_profit_loss", "fixed_assets",
              "inc_bef_tax", "intang_assets", "inventories", "liq_assets", "material_exp", "personnel_exp",
@@ -186,6 +219,9 @@ for (i in ln_vars){
 data <- data %>% 
   mutate_at(vars(ln_vars2), funs(ifelse(is.na(.), min(., na.rm = T)/2, .)))
 
+```
+
+```{r, include=FALSE}
 ###########################################################
 # look at more financial variables, create ratios
 ###########################################################
@@ -212,6 +248,9 @@ data <- data %>%
 data <- data %>%
   mutate_at(vars(bs_names), funs("bs"=ifelse(total_assets_bs == 0, 0, ./total_assets_bs)))
 
+```
+
+```{r, include=FALSE}
 ########################################################################
 # creating flags, and winsorizing tails
 ########################################################################
@@ -247,7 +286,9 @@ variances<- data %>%
 
 data <- data %>%
   select(-one_of(names(variances)[variances]))
+```
 
+```{r, include=FALSE}
 ########################################################################
 # additional
 # including some imputation
@@ -323,7 +364,6 @@ fg_inc<-ggplot(data = data, aes(x=inc_bef_tax_pl, y=as.numeric(fast_growth))) +
   theme_bw() +
   theme( panel.grid.minor.x = element_blank(), 
          plot.title = element_text( size = 12, face = "bold", hjust = 0.5 ) )
-fg_inc
 
 # standardize original income variable
 data <- data %>% mutate( inc_bef_tax_std = inc_bef_tax / sales)
@@ -336,8 +376,10 @@ wins_inc<-ggplot(data = data, aes(x=inc_bef_tax_std, y=inc_bef_tax_pl)) +
   scale_x_continuous(limits = c(-10,10), breaks = seq(-10,10, 5)) +
   theme( panel.grid.minor.x = element_blank(), 
          plot.title = element_text( size = 12, face = "bold", hjust = 0.5 ) )
-wins_inc
+```
 
-# export data to csv and rds
-write_csv(data,paste0(data_out,"bisnode_firms_clean.csv"))
-write_rds(data,paste0(data_out,"bisnode_firms_clean.rds"))
+```{r}
+fg_inc
+wins_inc
+```
+
