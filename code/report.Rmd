@@ -12,7 +12,6 @@ output:
 knitr::opts_chunk$set(echo = FALSE)
 knitr::opts_chunk$set(message = FALSE)
 knitr::opts_chunk$set(warning = FALSE)
-#knitr::opts_chunk$set(cache = TRUE)
 ```
 
 ```{r, include=FALSE}
@@ -57,15 +56,61 @@ output <- "output/"
 data_out <- "data/clean/"
 ```
 
+# Executive Summary
+
+The aim of this case study is to build a predictive model estimating the likelihood of a company to be fast growing, understood here as doubling sales revenues year-on-year. By employing a large sample of EU companies throughout the 2005 to 2016 period, this case study aims to estimate the probability of a fast growth company, leveraging financial and firm-centric features. This probability prediction sets the basis for creating a classification model to differentiate fast growing firms from non-fast growing firms. The model of choice for this case study is the probability forest. While it is a black box algorithm, its performance on a small set of predictors (thus reducing algorithmic complexity) showcases that not all financial and non-financial features are important when evaluating the potential growth of a company. The implications for this study translate into investor opportunity. Lastly, the main takeaway of predictive and classification modelling is that investors can choose to opt for a highly-efficient black box model, whose factors cannot be explained, or they can sacrifice small accuracy gains by employing a logit model, whose coefficients are directly interpretable.
+
+# Introduction - Purpose & Rationale
+
+The purpose of this case study is to build a prediction model which is suitable for predicting the probability of whether a firm is fast growing. Furthermore, by applying the appropriate threshold - which is calculated by minimizing the average expected loss - the model can also be used to classify firms into two categories: fast growing and non-fast growing. The practical rationale of the case study is that the predictions of the model could have the potential to support investment decisions.
+
+The data and the codes used in this case study are accessible from [this](https://github.com/cosmin-ticu/da3_firm_exit-classification) GitHub repository. The analysis undertaken by this study is similar in nature to the Bisnode case study conducted by Bekes and Kezdi in their [“Data Analysis for Business, Economics and Policy”](https://gabors-data-analysis.com/) book (follow chapter 17 for reference).
+
+The structure of this report is the following:
+
+1. Description of dataset, data cleaning, label and feature engineering
+
+2. Modelling choices, used predictor sets
+
+3. Probability prediction using different models
+
+4. Classification by using the previously estimated models
+
+5. Assessment of external validity
+
+6. Suggestions for further research.
+
+# Data & Variables
+
+The data for this case study stems from Bekes and Kezdi’s [data repository](https://osf.io/b2ft9/). The original dataset of companies was created by [Bisnode](https://www.bisnode.com/), a business data and analytics company, from multiple publicly available sources for educational purposes. The sample represents all of the registered companies between 2005 and 2016 throughout three selected medium-sized European Union countries. For each entry in the dataset (representing a company in a given fiscal year), Bisnode provides details on its financial performance, CEO characteristics, balance sheet characteristics, employee measures, geographic measures and many more firm-specific factors. The host of these features can be understood in detail by reading this [Excel sheet](https://github.com/cosmin-ticu/da3_firm_exit-classification/blob/main/data/raw/bisnode_variable_names.xls) containing the variable names, units of measurement and designated purpose.
+
+The large coverage of this dataset, spanning the auto manufacturing, equipment manufacturing and horeca industries potentially gives the findings of this study a large external validity. This topic will be approached in depth at the end of the report.
+
+The following sections cover the data selection and wrangling choices of the researchers. The cleaned dataset’s features are then transformed in order to reduce bias, redundancy and gap effects. The creation of a large pool of variables at the of the data munging process serves predictive modelling purposes. Various combinations of features are then chosen, in the data modelling section, for a series of predictive models, with varying degrees of complexity.
+
+## Label Engineering
+
+As this case study follows a different predictive end goal as the Bekes and Kezdi study (which aimed to predict firm exit), the target variable needs to be engineered according to a growth metric. 
+
+One possible measure of growth is income before tax. The main disadvantage of using this feature is that highly grossing firms tend to not make money during their initial years of expansion into new markets and products. As such, a company can grow exponentially, like in the case of 2010s Uber, but not retain income before taxes during its first expansion years. The same logic applies to using profit loss year-on-year as a growth statistic. Furthermore, with tax differences between countries, we should refrain from using net measures of financial growth.
+
+As a final choice, with data spanning a full decade of companies’ performance, the fast growth target was engineered as a doubling of sales revenues year-on-year. This means that, for each year in the dataset, firms which observed a 100% increase in sales revenues from the prior year were categorized as fast growing.
+
+As this study uses a cross-sectional approach, only one year was chosen to conduct the predictive model on. 2014 contained the largest pool of non-missing values, making it the perfect candidate for prediction. The financial features available in this dataset were calculated according to each fiscal year (starting January 1st and ending December 31st each year), thus our fast growth calculation is based on each firm’s 2013 and 2014 sales revenues.
+
+Lastly, with a growth rate aligned to fiscal year changes and with a strict binary designation of fast growth, it is within the scope of this study to exclude the firms that exhibited zero or lower percentage changes in sales revenues from 2013 to 2014. Thus, our final engineered label, fast growth, is a binary variable indicating whether, out of all sampled companies with any sales revenue growth, a company’s sales increased by 100% or more.
+
+## Selection and Sample Design
+
+To reduce the effects of extreme values, spanning both very early stage startups and extremely large corporations, the sample was reduced by keeping only entries with sales values for 2014 resting between the 5th and 95th percentiles of the original data. The variables chosen for these models span financial features (such as current assets, liabilities, employee expenses, etc.), company features (such as age, industry, region, etc.) and CEO features (such as foregin management ratio, gender ratio, age and count). Differentiating from the Bekes and Kezdi case study, this study has not included balance sheet features or default (bankruptcy) features.
+
 ```{r, include=FALSE}
 ################
 # import data
 ################
 
-#data <- read_csv(paste0(data_in,"cs_bisnode_panel.csv"))
-data <- read_csv('C:/CEU/Winter_Term/Data_Analysis_3/Assignment_2/da3_firm_exit-classification/data/raw/cs_bisnode_panel.rds')
 github_link <- 'https://raw.githubusercontent.com/cosmin-ticu/da3_firm_exit-classification/main/data/raw/cs_bisnode_panel.csv'
-#data <- read_csv(github_link)
+data <- read_csv(github_link)
 
 # drop variables with many NAs
 data <- data %>%
@@ -127,6 +172,10 @@ describe(data$sales)
 # keep companies whose sales are between the 5th and the 95th percentile
 data <- data %>% filter(sales > 5582 & sales < 2045845 )
 ```
+
+## Feature Engineering
+
+While the original dataset, with its raw variables, can constitute a predictive modelling basis, the inclusion of many financial features without transformation increases the risk of skewing results. It is worthwhile to inspect a few of these financial variables’ distributions in order to designate a fitting transformation.
 
 ```{r, include=FALSE}
 ###########################################################
@@ -215,6 +264,10 @@ plot_grid(
   rel_heights = c(0.1, 1)
 )
 ```
+
+Based on the histograms above, two different approaches for reducing skewness arise: logarithmic transformation or standardizing and winsorizing according to each variable’s category (assets-related or sales-related). For the purpose of identifying the best performing predictive model, both transformation approaches are taken and their performance as predictors for the fast growth target variable will be discussed in the data modelling section.
+
+Features such as personnel expenses, income before tax, inventories etc. were standardized by being divided by the sales revenue. Features such as assets, liabilities and equity were standardized by being divided by the total assets (sum of intangible, current and fixed assets). All of these ratioed features were then winsorized, meaning that for each variable we identified a threshold value (according to domain knowledge) and replaced values outside of that threshold with the threshold. One can imagine this computation to be similar to capping the bottom and top 1% of firms to more tangible values, being represented by the dispersion of the 99% majority.
 
 ```{r, include=FALSE}
 # add the logs of these variables
@@ -396,9 +449,34 @@ wins_inc<-ggplot(data = data, aes(x=inc_bef_tax_std, y=inc_bef_tax_pl)) +
 ```
 
 ```{r}
-fg_inc
 wins_inc
 ```
+
+From the plot above, we can directly see the standardizing and winsorizing effects of the financial variables’ feature engineering. By adding a cap (and subsequent flag variables for higher or lower values than the designated thresholds), the distributions of our financial variables take a more normal form, reducing the potential for model skewness attributed to extreme values.
+
+```{r}
+fg_inc
+```
+
+Based on the above distribution, we can see that even after standardizing and winsorizing our financial variables, the patterns of association to the target variable can still be seen. This serves as a justification for proceeding with engineered versions of the financial features. 
+
+It is worthwhile to mention that not all of the flags for financial variables were kept, as some original distributions of variables were within the set thresholds. As such, only the flags without zero variance were kept. 
+
+In a similar fashion for the engineered label, a predictor measuring previous growth was also created. This previous growth variable looks at the percentage change in sales revenues from 2011 to 2012, thus serving a direct comparison purpose to the 2013 to 2014 sales revenue changes which designated the fast growth label.
+
+To handle the missing values present within the dataset, three different cases arise: imputation, variable removal and observation removal. The labor cost variable, while a very noise measure, is hypothesized to be important in the predictive model. As such, its missing values were imputed with the mean of the measure and a flag variable designating this mutation was created. None of the variables that were kept when designing the sample of this study contained too many missing values which would warrant their drop from the dataset. Lastly, missing instances for liquid assets, foreign management ratio, material expenditure and headquarters’ region location were dropped from the final cleaned sample as they could not be accurately imputed.
+
+## Chosen Features
+
+The company features kept in this study are: age of firm, squared age, dummy variable for newly established, standardized industry categories, factor variable for headquarters’ location regions, dummy variable for big city locations, labor cost (and flag for missing labor cost information) and the previous growth engineered variable. The CEO features kept in this study are: factor variable for gender, winsorized CEO age (with flags for high, low and missing), CEO count and a dummy variable for foreign management ratio. Alongside the CEO and company features, we include three sets of financial variables: the original (level) ones (rawvars), the ones transformed into logarithmic form (rawvars_ln) and the standardized, winsorized and squared ones (engvars 1-3). The final sample used for modeling contains 10591 observations. The next section defines the predictor sets as a combination of the identified categories of variables and subsequent interactions.
+
+# Modelling Choices
+
+The following section checks the interaction between our chosen variables, defines predictor sets of increasing complexity and examines a few baseline logit models created on the full data to identify potentially important predictors and their coefficients (marginal effects).
+
+## Interactions
+
+It is common when working with a large set of potential predictors to have certain pairs of them affect each other’s association with the target variable. This case can arise as a phenomenon of multicollinearity, being present between continuous variables, and as an observable change in association pattern throughout different categories. The latter case arises when dealing with one factor and one continuous variable or with two factor variables. In our case, having a combination of continuous and factor variables, we inspect a few notable interactions and attempt to mitigate their effects by adding an interaction term to our sets of predictors.
 
 ```{r, include=FALSE}
 #########################
@@ -481,6 +559,24 @@ lasso_vars <- X9
 rf_vars  <-  c(rawvars, ceo, firm)
 ```
 
+The above graph exhibits the fluctuating association patterns between income before tax and the different industry categories with regards to fast growing and non-fast growing firms. If these variables did not exhibit any interaction, thus not mitigating (or influencing) each other’s effects on the target variable, we would expect to see both lines follow similar trends. However, the observable overlap justifies the inclusion of an interaction term.
+
+Interactions were also found for industry categories with the age of CEO, the foreign management variable and the urban location variable, all with regards to the target label. These findings justify the inclusion of these interaction terms in the predictor sets.
+
+Lastly, a large set of interaction terms was conceptualized, by interacting each of the financial variables with all of the firm and CEO variables. This last measure was done in order to create a model of very large complexity on which a coefficient-penalizing LASSO logit regression can be run. This will allow us to see whether some of the interactions between financial and company characteristics exhibit statistically significant effects with regards to our predicted label of fast growth.
+
+## Predictor Sets
+
+The predictor sets vary in complexity, starting from a 5-variable baseline model all the way to a 260-predictor model. As a note on reading the following tables and graphs, this study aims to follow the same logic as the Bekes and Kezdi case study and differentiates between the number of variables used and the number of coefficients (or number of predictors). This is a common case in data science as models can include interactions or splits of the same variable (thus a single variable can have multiple coefficients).
+
+The first predictor set (X1) contains the industry category, standardized income before tax, company age, headquarters’ region location and the previous growth variable. Starting from this predictor set, gradually more and groups of variables are added alongside their interactions. Here, it is important to make the distinction between predictor sets X3, X4 and X5 as they contain the financial variables in logarithmic transformation and their subsequent interactions with the other variable sets. Predictor sets X6-X9 contain the standardized and winsorized financial variables and their subsequent interactions with the other variable sets. These 9 combinations of predictors represent the varying complexity of the 9 logit predictive models to be employed in this study.
+
+The predictor set of the 268-variable logit model (Logit X9) serves as the same basis for the LASSO logit regression (lasso_vars), while the predictor set of Logit X2 serves as the same basis for the Random Forest probability model (rf_vars). This means that the LASSO model starts from a set of standardized and winsorized financial variables and their interactions with the CEO and company variable sets. On the other hand, the Random Forest does not use any of the engineered variables or transformations, thus including all of the financial variables in their original level form. This is done because Random Forest, while a black box model, is not susceptible to non-linear right-skew patterns, such as financial variables, unlike OLS, logit and probit probability models.
+
+## Baseline Logit Models
+
+As a sanity check, Logit X2, the model containing the original financial variables, firm features and CEO features, alongside Logit X7, the baseline feature engineering model containing the standardized financial variables and CEO and firms variables (without any interactions), were run on the entire dataset. The marginal effects of the identified coefficients can be found here for [X2](https://github.com/cosmin-ticu/da3_firm_exit-classification/blob/main/output/logit_X2.html) and here for [X7](https://github.com/cosmin-ticu/da3_firm_exit-classification/blob/main/output/logit_X7.html).
+
 ```{r, include=FALSE}
 #########################
 # run logit models
@@ -527,6 +623,26 @@ rf_vars  <-  c(rawvars, ceo, firm)
 # knitr::kable( sum_table2, caption = "Marginal effects of baseline engineered logit model", digits = 2 ) %>% kable_styling( position = "center", latex_options = 'hold_position' )
 ```
 
+# Probability Prediction
+
+Having decided on the predictor sets to use the next step is to estimate models for probability prediction. In total we estimate 11 models: 9 logit models with different model complexity, 1 logit with LASSO and 1 random forest model. Before estimating the models we randomly split our dataset into two parts: a training set (with 80% of the observations) and a holdout set (with 20% of the observations). To find the best performing model we use 5-fold cross-validation and calculate average cross-validated RMSE as well as the average area under the curve (AUC) for each model.
+
+## Logit Models
+
+The first type of models we estimate are logit models. For this we use the predictor sets X1 to X9 defined above which means that the models differ in complexity, since they have different numbers of predictors, the predictors have different functional forms and interactions are included in some of them as well. We fit a logit model for each of these predictor sets using 5-fold cross-validation. We then fit ROC curves for each of the folds for every model to be able to get the average AUC for them.
+
+## Logit LASSO
+
+The second type of model we estimate is a logit with LASSO. To fit the model we use the lasso_vars predictor set which is a wide set containing all the standardized and winsorized financial predictors plus their polynomials and flags, all the CEO and firm related variables and all the interactions we defined earlier. We set the grid for the lambda parameter to be powers of 10 between 0.1 and 0.0001. Then we fit a LASSO model with cross-validation and just like in the previous case we also fit ROC curves for all the folds of the best model to get the average AUC value.
+
+## Probability Forest
+
+The last type of model we estimate is a (probability) random forest using the rf_vars predictor set which contains the rawvars, the CEO and the firm predictors. As for the tuning parameters we set the number of randomly chosen variables at each split to be either 5, 6 or 7 which are around the square root of the total number of predictors used to estimate the model. The number of observations in the final nodes of each tree is set to be either 10 or 15. We fit a random forest model using these parameters and 5-fold cross-validation. The best performing random forest model has 15 observations in the final nodes for each tree and chooses 7 variables randomly at each split. We use this model to fit ROC curves for its folds to get the average AUC value. 
+
+## Comparison of all Models
+
+Having calculated the average RMSE and AUC values for all the 11 models we create a comparison table which is shown below.
+
 ```{r, include=FALSE}
 #########################
 # PREDICT PROBABILITIES
@@ -542,8 +658,7 @@ data_holdout <- data[-train_indices, ]
 
 Hmisc::describe(data$fast_growth)
 Hmisc::describe(data_train$fast_growth)
-Hmisc::describe(data_holdout
-                $fast_growth)
+Hmisc::describe(data_holdout$fast_growth)
 # all partitions have comparable distributions
 
 # 5 fold cross-validation
@@ -629,18 +744,17 @@ tune_grid_rf <- expand.grid(
   .min.node.size = c(10, 15)
 )
 
-# set.seed(13505)
-# rf_model_p <- train(
-#   formula(paste0("fast_growth_f ~", paste0(rf_vars, collapse = " + "))),
-#   method = "ranger",
-#   data = data_train,
-#   tuneGrid = tune_grid_rf,
-#   trControl = train_control
-# )
+set.seed(13505)
+rf_model_p <- train(
+  formula(paste0("fast_growth_f ~", paste0(rf_vars, collapse = " + "))),
+  method = "ranger",
+  data = data_train,
+  tuneGrid = tune_grid_rf,
+  trControl = train_control
+)
 
 # save model
 #saveRDS(rf_model_p, paste0(output,'rf_model.rds'))
-rf_model_p <- readRDS('C:/CEU/Winter_Term/Data_Analysis_3/Assignment_2/da3_firm_exit-classification/output/rf_model.rds')
 
 rf_model_p$results
 
@@ -700,6 +814,10 @@ model_summary1 <- data.frame("Number of predictors" = unlist(nvars),
 knitr::kable( model_summary1, caption = "Performance of all models", col.names = c("Number of predictors", "CV RMSE", "CV AUC"), digits = 2 ) %>% kable_styling( position = "center", latex_options = 'hold_position' )
 ```
 
+In general we can conclude that including more predictors after a certain level is not advised because the models do not necessarily perform better. In addition, they get too complex. Based on the values displayed in the table, the best model is the random forest since it has the lowest RMSE and the highest AUC. Surprisingly, the second best model is a relatively simple one: logit X3 which uses the same number of predictors as the random forest. Its RMSE is higher by 0.02 and its AUC is lower by 0.05. This model was estimated on the X3 predictor set which contains the rawvars_ln (the logs of the financial variables), the CEO and the firm predictors.
+
+Since the random forest model proves to be the best performing one we calculate its RMSE on the holdout set which equals 0.35 just like its average cross-validated RMSE. Furthemore, we plot the ROC curve for this model using its predictions for the holdout set.
+
 ```{r, include=FALSE}
 # Take best model (RF) and estimate RMSE on holdout  ----------------------------------------
 
@@ -718,6 +836,10 @@ roc_obj_holdout <- roc(data_holdout$fast_growth, data_holdout$best_model_no_loss
 createRocPlot(roc_obj_holdout, "ROC curve for best model (RF)")
 ```
 
+The plot shows that the area under the curve is relatively large, even though there is still room for improvement. The first part of the curve is quite steep which means that the ratio of True Positive cases increases faster than that of the False Positive ones as we lower the threshold which shows that the model would probably perform well if used for classification.
+
+Besides the ROC curve we also calculate the bias and create a calibration curve for the model using its predictions for the holdout set and the actual probabilities. The bias of the model is 0.004 which means that its predictions are about right on average. As for its calibration we can see on the plot that in case of lower probabilities the green line is relatively close to the 45 degree line, however it oscillates a little for higher ones. This means that higher probabilities are more difficult to predict with the model but in general it is relatively well calibrated.
+
 ```{r}
 # Bias and calibration curve -----------------------------------------------------------
 # bias = mean(prediction) - mean(actual)
@@ -729,6 +851,22 @@ create_calibration_plot(data_holdout,
                         actual_var = "fast_growth",
                         n_bins = 10)
 ```
+
+Based on the comparison, in case a ‘black box’ model is acceptable by the client who is planning to invest in fast growing firms, we would suggest they use the random forest model for probability prediction since it has the best performance. However, in case they preferred a more ‘transparent’ model which has coefficients then we would advise them to go with the logit X3 model because it is close to the random forest in terms of performance.
+
+# Classification
+
+The final part of this case study is defining a loss function. We can estimate which of the previously fitted models would produce the lowest average expected loss if used for classification purposes. Therefore we first define a loss function and then calculate the average expected loss for different thresholds for each of the 11 models. Finally, we use the best performing model - the one with the lowest average expected loss - for classification on the holdout set and show a confusion matrix of the results.
+
+## Define Loss Function
+
+The first step of the classification process is defining a loss function. This means assigning a cost to the False Positive (FP) as well as the False Negative (FN) classifications. For our case study we decided to set the cost of FP decisions to 2000 euros since a FP decision would mean that we classify a firm as fast growing even though it is not. This case would translate to advising the client to invest in a firm which would be growing at some rate below the threshold - as we only have growing firms in our dataset - but not at a fast rate. Consequently, they would lose part of their investment but not all of it. 
+
+As for the cost of FN decisions we decided to assign 5000 euros because a FN means that we classify a firm as non-fast growing when it is actually fast growing. Therefore we would advise the client not to invest in a firm which would mean a completely foregone business opportunity. Consequently, this would have a higher cost. To sum up, the ratio of the costs of FP and FN decisions is 2/5.
+
+## Model Selection based on Average Expected Loss
+
+Since we have a loss function we can carry out classification using different thresholds and calculate the expected loss for these. We (1) fit a ROC curve for each fold of all the 11 models, (2) calculate the expected loss for different thresholds, (3) average these and (4) pick the threshold corresponding to the lowest average expected loss. The table below shows the results of this process.
 
 ```{r, include=FALSE}
 #########################
@@ -796,6 +934,10 @@ model_summary2 <- data.frame("Avg of optimal thresholds" = unlist(best_tresholds
 knitr::kable( model_summary2, caption = "Best thresholds based on expected loss for all models", col.names = c("Avg of optimal thresholds","Threshold for fold #5", "Avg expected loss","Expected loss for fold #5"), digits = 2 ) %>% kable_styling( position = "center", latex_options = 'hold_position' )
 ```
 
+Following the same trend as in probability prediction, we can conclude that the random forest model performs the best, meaning that it has the lowest average expected loss, closely trailed by logit X3.
+
+Since the random forest model performs the best we use Fold 5 of this model to visualize the expected loss for different thresholds (left plot). We can see in the plot that the threshold which minimizes the loss function is 0.25 which is 0.04 lower than the average threshold, while the minimum of loss is 0.64 which is 0.03 higher than the average one. We also show the ROC curve for the same fold (right plot) and mark the point which corresponds to the best threshold (0.25) which minimizes the loss function. In addition, the plot displays the TP and TN rates for that threshold.
+
 ```{r, out.width='50%'}
 # Create plots based on Fold5 in CV ----------------------------------------------
 
@@ -808,6 +950,11 @@ knitr::kable( model_summary2, caption = "Best thresholds based on expected loss 
                            "ROC curve for RF Fold 5")
 ```
 
+We use the random forest model for classification on the holdout sample by applying the threshold of 0.29 and get an average expected loss of 0.61 which equals to the one in the comparison table. This means that if we use this model for classification the client can expect to lose 610 euros on average of their investment.
+
+## Confusion Matrix for Best Model
+
+As the last step of the classification process we create a confusion matrix from the classification on the holdout set using the random forest model.
 
 ```{r}
 # Pick best model based on average expected loss ----------------------------------
@@ -835,6 +982,19 @@ cm_object <- confusionMatrix(holdout_prediction,data_holdout$fast_growth_f)
 cm <- cm_object$table
 #cm
 
-knitr::kable( cm, caption = "Confusion matrix for best model RF", digits = 2 ) %>% kable_styling( position = "center", latex_options = 'hold_position' )
+knitr::kable( cm, caption = "Confusion matrix for best model RF (rows: predicted, columns: actual)", digits = 2 ) %>% kable_styling( position = "center", latex_options = 'hold_position' )
 ```
 
+According to the matrix, around 80% of the observations are correctly classified. The rate of FP decisions is around 12%, while the rate of FN decisions is approximately 8%. Since we defined the cost of the former to be 2000 euros and the latter to be 5000 euros this means that the ratio of the less costly error is higher. This is promising in case the model was used to support clients with their investment decisions.
+
+# External Validity
+
+A drawback of this study with regards to external validity is represented by the exclusion of firms that are not growing in sales year-on-year. As such, the reproducibility of this model is possible across different timeframes and different locations in the European Union (as the sample of medium-sized countries can be thought of as confidently representative), but it is not reproducible across a different spectrum of performing firms (including decreasing sales or extremely high values for sales revenues).
+
+Before applying this model on a larger time frame, it should be tested across one year gaps throughout the 2005 to 2016 period. This would allow us to see whether the coefficients retain their importance (measured by statistical significance) throughout the last decade. 
+
+# Further Research
+
+While this study sets the basis for predicting a fast growing firm, none of the environmental and socio-economic factors relating to each market are taken into consideration. As we are exploring different industries, this study does a good job at attenuating the effects or biases stemming from each industry by including a diverse portfolio of industry categories (from auto manufacturing to horeca). However, further research should center around individual industries and include multiple countries in order to see if coefficients vary across the markets.
+
+Lastly, the limited scope of this study meant that we were working with a cross-sectional sample. These predictive models serve a basis for 2014 performance. However, if long-term fast growth is of interest to investors, a time series analysis predicting the probability of fast growth year-on-year for the past decade is better suited.
