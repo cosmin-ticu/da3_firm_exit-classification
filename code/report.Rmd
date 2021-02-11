@@ -12,7 +12,7 @@ output:
 knitr::opts_chunk$set(echo = FALSE)
 knitr::opts_chunk$set(message = FALSE)
 knitr::opts_chunk$set(warning = FALSE)
-knitr::opts_chunk$set(cache = TRUE)
+#knitr::opts_chunk$set(cache = TRUE)
 ```
 
 ```{r, include=FALSE}
@@ -63,7 +63,7 @@ data_out <- "data/clean/"
 ################
 
 #data <- read_csv(paste0(data_in,"cs_bisnode_panel.csv"))
-data <- read_csv('C:/CEU/Winter_Term/Data_Analysis_3/Assignment_2/da3_firm_exit-classification/data/raw/cs_bisnode_panel.csv')
+data <- read_csv('C:/CEU/Winter_Term/Data_Analysis_3/Assignment_2/da3_firm_exit-classification/data/raw/cs_bisnode_panel.rds')
 github_link <- 'https://raw.githubusercontent.com/cosmin-ticu/da3_firm_exit-classification/main/data/raw/cs_bisnode_panel.csv'
 #data <- read_csv(github_link)
 
@@ -487,44 +487,44 @@ rf_vars  <-  c(rawvars, ceo, firm)
 #########################
 
 # Check simplest model X1
-glm_modelx1 <- glm(formula(paste0("fast_growth ~", paste0(X1, collapse = " + "))),
-                   data = data, family = "binomial")
-summary(glm_modelx1)
+# glm_modelx1 <- glm(formula(paste0("fast_growth ~", paste0(X1, collapse = " + "))),
+#                    data = data, family = "binomial")
+# summary(glm_modelx1)
 
 # Check model X2
-glm_modelx2 <- glm(formula(paste0("fast_growth ~", paste0(X2, collapse = " + "))),
-                   data = data, family = "binomial")
-summary(glm_modelx2)
+# glm_modelx2 <- glm(formula(paste0("fast_growth ~", paste0(X2, collapse = " + "))),
+#                    data = data, family = "binomial")
+# summary(glm_modelx2)
 
 #calculate average marginal effects (dy/dx) for logit
-mx2 <- margins(glm_modelx2)
+#mx2 <- margins(glm_modelx2)
 
-sum_table <- summary(glm_modelx2) %>%
-  coef() %>%
-  as.data.frame() %>%
-  select(Estimate) %>%
-  mutate(factor = row.names(.)) %>%
-  merge(summary(mx2)[,c("factor","AME")])
-
-knitr::kable( sum_table, caption = "Marginal effects of baseline raw logit model", digits = 2 ) %>% kable_styling( position = "center", latex_options = 'hold_position' )
+# sum_table <- summary(glm_modelx2) %>%
+#   coef() %>%
+#   as.data.frame() %>%
+#   select(Estimate) %>%
+#   mutate(factor = row.names(.)) %>%
+#   merge(summary(mx2)[,c("factor","AME")])
+# 
+# knitr::kable( sum_table, caption = "Marginal effects of baseline raw logit model", digits = 2 ) %>% kable_styling( position = "center", latex_options = 'hold_position' )
 
 # baseline model is X7 based on feature engineering (all vars, but no interactions) -------------------------------------------------------
 
-glm_modelx7 <- glm(formula(paste0("fast_growth ~", paste0(X7, collapse = " + "))),
-                 data = data, family = "binomial")
-summary(glm_modelx7)
+# glm_modelx7 <- glm(formula(paste0("fast_growth ~", paste0(X7, collapse = " + "))),
+#                  data = data, family = "binomial")
+# summary(glm_modelx7)
 
 #calculate average marginal effects (dy/dx) for logit
-m <- margins(glm_modelx7, vce = "none")
+#m <- margins(glm_modelx7, vce = "none")
 
-sum_table2 <- summary(glm_modelx7) %>%
-  coef() %>%
-  as.data.frame() %>%
-  select(Estimate, `Std. Error`) %>%
-  mutate(factor = row.names(.)) %>%
-  merge(summary(m)[,c("factor","AME")])
-
-knitr::kable( sum_table2, caption = "Marginal effects of baseline engineered logit model", digits = 2 ) %>% kable_styling( position = "center", latex_options = 'hold_position' )
+# sum_table2 <- summary(glm_modelx7) %>%
+#   coef() %>%
+#   as.data.frame() %>%
+#   select(Estimate, `Std. Error`) %>%
+#   mutate(factor = row.names(.)) %>%
+#   merge(summary(m)[,c("factor","AME")])
+# 
+# knitr::kable( sum_table2, caption = "Marginal effects of baseline engineered logit model", digits = 2 ) %>% kable_styling( position = "center", latex_options = 'hold_position' )
 ```
 
 ```{r, include=FALSE}
@@ -629,17 +629,18 @@ tune_grid_rf <- expand.grid(
   .min.node.size = c(10, 15)
 )
 
-set.seed(13505)
-rf_model_p <- train(
-  formula(paste0("fast_growth_f ~", paste0(rf_vars, collapse = " + "))),
-  method = "ranger",
-  data = data_train,
-  tuneGrid = tune_grid_rf,
-  trControl = train_control
-)
+# set.seed(13505)
+# rf_model_p <- train(
+#   formula(paste0("fast_growth_f ~", paste0(rf_vars, collapse = " + "))),
+#   method = "ranger",
+#   data = data_train,
+#   tuneGrid = tune_grid_rf,
+#   trControl = train_control
+# )
 
 # save model
 #saveRDS(rf_model_p, paste0(output,'rf_model.rds'))
+rf_model_p <- readRDS('C:/CEU/Winter_Term/Data_Analysis_3/Assignment_2/da3_firm_exit-classification/output/rf_model.rds')
 
 rf_model_p$results
 
